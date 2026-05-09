@@ -96,7 +96,7 @@ class Sigs(Sequence):
         else:
             # variants of original name
             for i, sig in enumerate(self.sigs):
-                sig.name = f"{name}.{i+1}"
+                sig.name = f"{name}.{i + 1}"
 
     def __getitem__(self, index: Union[int, slice]):
         return self.sigs[index]
@@ -323,7 +323,6 @@ class File:
 
 
 class SublimeText(File):
-
     VERSION_PATTERNS = tuple(
         r % rb"(\d{4})"
         for r in (
@@ -511,6 +510,7 @@ class PatchDB:
             4196,
             4198,
             4199,
+            4205,
         ),
         "stable": (
             4107,
@@ -556,6 +556,7 @@ class PatchDB:
             raise ValueError(f"Unsupported architecture {arch}")
         self.os = os
         self.arch = arch
+        self.version = version
         self.DB = {
             os: {
                 arch: {channel: () for channel in list(self.CHANNELS.keys()) + ["base"]}
@@ -575,6 +576,7 @@ class PatchDB:
         if self.os == "windows":
             self.DB["windows"]["x64"]["base"] = (
                 Patch(
+                    # schedule callback 1
                     "nop",
                     Sig(
                         "41 B8 88 13 00 00 E8 ? ? ? ?",
@@ -583,6 +585,7 @@ class PatchDB:
                     ),
                 ),
                 Patch(
+                    # schedule callback 2
                     "nop",
                     Sig(
                         "41 B8 98 3A 00 00 E8 ? ? ? ?",
@@ -591,62 +594,54 @@ class PatchDB:
                     ),
                 ),
                 Patch(
-                    "ret0",
-                    Sig(
-                        "48 8d ? ? ? ? ? e8 ? ? ? ? 48 89 c1 ff ? ? ? ? ? ? 8b",
-                        ref="lea",
-                        name="license_notification",
-                    ),
-                ),
-                Patch(
-                    "ret0",
+                    # enum
+                    "ret0" if self.version < 4205 else "ret1",
                     Sigs(
                         "license_check",
-                        Sig(
-                            "45 31 ? e8 ? ? ? ? 85 c0 75 ? ? 8d",
-                            ref="call",
-                            offset=0x3,
-                        ),
+                        # callsite 1
                         Sig(
                             "0f 11 ? ? ? 31 ? 45 31 ? 45 31 ? e8 ? ? ? ?",
                             ref="call",
                             offset=0xD,
                         ),
-                        # Sig(
-                        #     "8d ? ? 48 89 ? ? ? 48 89 ? ? ? 48 89 ? e8 ? ? ? ?",
-                        #     offset=0x10,
-                        #     ref="call",
-                        # ),
+                        # callsite 2
+                        Sig(
+                            "45 31 ? e8 ? ? ? ? 85 c0 75 ? ? 8d",
+                            ref="call",
+                            offset=0x3,
+                        ),
+                        # callsite 3
                         Sig("e8 ? ? ? ? ? 8b ? ? ? ? ? 85 c0 0f 94 ? ? 74", ref="call"),
                     ),
                 ),
                 Patch(
+                    # default
+                    "ret0",
+                    Sig(
+                        "48 8d ? ? ? ? ? e8 ? ? ? ? 48 89 c1 ff ? ? ? ? ? ? 8b",
+                        # thread
+                        ref="lea",
+                        name="online_license_notification",
+                    ),
+                ),
+                Patch(
+                    # CloseHandle
                     "ret1",
                     Sigs(
-                        "server_validate",
+                        "online_license_check",
+                        # thunk
                         Sig(
                             "8b 51 ? 48 83 c1 08 e9 ? ? ? ?",
                             ref="jmp",
                             offset=0x7,
                         ),
-                        # Sig(
-                        #     "48 8b 49 08 8b 51 20 e9 ? ? ? ?",
-                        #     ref="jmp",
-                        #     offset=0x7,
-                        # ),
+                        # thread creator
                         Sig(
                             "56 57 53 48 83 ec ? 89 d6 48 89 cf b9 ? 00 00 00 e8 ? ? ? ?",
                         ),
-                    )
+                        # TODO: thread
+                    ),
                 ),
-                # TODO: investigate switch to crashpad in 4153
-                # Patch(
-                #     "ret",
-                #     Sig(
-                #         "41 57 41 56 41 55 41 54 56 57 55 53 B8 ? ? ? ? E8 ? ? ? ? 48 29 C4 8A 84 24 ? ? ? ?",
-                #         name="crash_reporter",
-                #     ),
-                # ),
             )
 
 

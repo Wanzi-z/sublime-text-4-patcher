@@ -1,18 +1,39 @@
-[tool.poetry]
+[project]
 name = "sublime-text-4-patcher"
 version = "0.1.0"
-description = "Python 3 patcher for Sublime Text v4107-4200 Windows x64"
-authors = ["rainbowpigeon <16717153+rainbowpigeon@users.noreply.github.com>"]
-license = "GPLv3"
+description = "Python 3 patcher for Sublime Text v4107-4205 Windows x64"
+authors = ["rainbowpigeon <113040852+rainbowpigeon@users.noreply.github.com>"]
+readme = "README.md"
+license = "GPL-3.0"
+requires-python = ">=3.9"
+dependencies = [
+    "pefile==2024.8.26",
+]
 
-[tool.poetry.dependencies]
-python = "^3.9"
-pefile = "~=2021.5.24"
+[dependency-groups]
+dev = [{include-group = "lint"}]
+lint = ["ruff", "ty"]
 
-[tool.poetry.dev-dependencies]
-black = "^22.3.0"
-pre-commit = "^2.19.0"
+[tool.ruff]
+line-length = 100
+target-version = "py39"
 
-[build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "D",        # pydocstyle
+    "COM812",   # trailing comma (formatter conflict)
+    "ISC001",   # string concat (formatter conflict)
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
+
+[tool.ty.environment]
+python-version = "3.9"
+
+[tool.ty.rules]
+possibly-unresolved-reference = "error"
+unused-ignore-comment = "warn"

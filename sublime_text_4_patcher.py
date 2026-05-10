@@ -4,17 +4,17 @@
 # Script by rainbowpigeon
 
 
-import re
-import pefile
-import logging
 import argparse
 import itertools
-from sys import exit
-from pathlib import Path
-from zipfile import ZipFile
+import logging
+import re
 from collections.abc import Sequence
-from typing import NamedTuple, Union, Optional, List
+from pathlib import Path
+from sys import exit
+from typing import List, NamedTuple, Optional, Union
+from zipfile import ZipFile
 
+import pefile
 
 TARGET_PROGRAM = "sublime_text.exe"
 
@@ -51,13 +51,13 @@ logger.addHandler(c_handler)
 
 
 class PrettyBytes:
-    def __init__(self, _bytes: bytes):
+    def __init__(self, _bytes: bytes) -> None:
         self.bytes = _bytes
 
     def __str__(self):
         return "".join("\\x{:02x}".format(b) for b in self.bytes)
 
-    def __format__(self, format_spec):
+    def __format__(self, format_spec) -> str:
         return format(str(self), format_spec)
 
 
@@ -65,14 +65,14 @@ class Sig:
     # TODO: could consider combining consecutive expressions into one
     BYTE_RE = b".{1}"
 
-    def __init__(self, pattern: str, ref: str = "", offset: int = 0x0, name: str = ""):
+    def __init__(self, pattern: str, ref: str = "", offset: int = 0x0, name: str = "") -> None:
         self.raw_pattern = pattern
         self.pattern = self.process_wildcards(self.raw_pattern)
         self.ref = ref
         self.offset = offset
         self.name = name
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f'"{self.name}": {self.raw_pattern}'
 
     @classmethod
@@ -88,7 +88,7 @@ class Sigs(Sequence):
     Contains multiple signatures as fallback options
     """
 
-    def __init__(self, name: str, *sigs: Sig):
+    def __init__(self, name: str, *sigs: Sig) -> None:
         self.sigs = sigs
         self.name = name
         if len(self.sigs) == 1:
@@ -101,13 +101,13 @@ class Sigs(Sequence):
     def __getitem__(self, index: Union[int, slice]):
         return self.sigs[index]
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.sigs)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
-    def __format__(self, format_spec):
+    def __format__(self, format_spec) -> str:
         return format(str(self), format_spec)
 
 
@@ -137,7 +137,8 @@ class Patch:
         self.sigs = sigs
 
         if patch_type not in Patch.patch_types:
-            raise ValueError(f"Unsupported patch type {patch_type}")
+            msg = f"Unsupported patch type {patch_type}"
+            raise ValueError(msg)
 
         self.patch_type = patch_type
         self.new_bytes = Patch.patch_types[self.patch_type]
@@ -162,13 +163,14 @@ class Patch:
                 file.data[self.offset : end_offset] = self.new_bytes
                 self.patched = True
                 return self.offset
-        else:
-            raise ValueError(f"Could not find any signatures for patch {self}")
+        msg = f"Could not find any signatures for patch {self}"
+        raise ValueError(msg)
 
     def revert(self, file: "File"):
         logger.info("Reverting patch %s...", self)
         if not self.patched:
-            raise ValueError(f"Patch {self} has not been applied")
+            msg = f"Patch {self} has not been applied"
+            raise ValueError(msg)
 
         end_offset = self.offset + len(self.old_bytes)
         self.log_patch(self.offset, self.sigs, self.new_bytes, self.old_bytes)
@@ -187,7 +189,7 @@ class Patch:
             )
         )
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f'"{self.patch_type} {self.sigs}"'
 
 
@@ -212,7 +214,7 @@ class File:
             self.patches: List[Patch] = []
             self.patched_offsets: List[int] = []
 
-    def add_patch(self, patch: Patch):
+    def add_patch(self, patch: Patch) -> None:
         self.patches.append(patch)
 
     def add_patches(self, patches: List[Patch]):
@@ -222,7 +224,7 @@ class File:
             return
         self.patches.extend(patches)
 
-    def save(self):
+    def save(self) -> None:
         backup_path = self.path.with_suffix(f"{self.path.suffix}.bak")
         logger.info("Backing up original file at %s", backup_path)
 
@@ -262,7 +264,7 @@ class File:
     def revert_patch(self, patch: Patch):
         return patch.revert(self)
 
-    def revert_all_patches(self):
+    def revert_all_patches(self) -> None:
         logger.info("Reverting all patches...")
         if not self.patches:
             logger.warning("No patches to revert")
@@ -277,31 +279,38 @@ class File:
             filepath = filepath.strip('"')
         path = Path(filepath)
         if not path.exists():
-            raise FileNotFoundError(f"File {filepath} does not exist")
+            msg = f"File {filepath} does not exist"
+            raise FileNotFoundError(msg)
         if not path.is_file():
             logger.warning("%s is a directory, not a file", filepath)
             path = path / TARGET_PROGRAM
             logger.warning("Proceeding with assumed file path %s", path)
             if not path.exists():
-                raise FileNotFoundError(f"File {path} does not exist")
+                msg = f"File {path} does not exist"
+                raise FileNotFoundError(msg)
             if not path.is_file():
-                raise FileNotFoundError(f"{path} is a directory, not a file")
+                msg = f"{path} is a directory, not a file"
+                raise FileNotFoundError(msg)
         return path
 
     def parse_pe(self):
         try:
             pe = pefile.PE(self.path, fast_load=True)
         except pefile.PEFormatError as e:
-            raise pefile.PEFormatError("Not a valid Windows application") from e
+            msg = "Not a valid Windows application"
+            raise pefile.PEFormatError(msg) from e
 
         if pe.NT_HEADERS.Signature != pefile.IMAGE_NT_SIGNATURE:
-            raise pefile.PEFormatError("Not a valid PE")
+            msg = "Not a valid PE"
+            raise pefile.PEFormatError(msg)
 
         if pe.FILE_HEADER.Machine != pefile.MACHINE_TYPE["IMAGE_FILE_MACHINE_AMD64"]:
-            raise pefile.PEFormatError("Not an x64 PE")
+            msg = "Not an x64 PE"
+            raise pefile.PEFormatError(msg)
 
         if not pe.is_exe():
-            raise pefile.PEFormatError("Not a standard EXE")
+            msg = "Not a standard EXE"
+            raise pefile.PEFormatError(msg)
 
         return pe
 
@@ -309,16 +318,18 @@ class File:
     def find(self, pattern: Union[Sig, bytes]):
         if isinstance(pattern, Sig):
             return Finder(self).sig_find(pattern)
-        elif isinstance(pattern, bytes):
+        if isinstance(pattern, bytes):
             return Finder(self).re_find(pattern)
+        return None
 
     def find_string(self, pattern: Union[Sig, bytes]):
         if isinstance(pattern, Sig):
             return Finder(self).sig_find_string(pattern)
-        elif isinstance(pattern, bytes):
+        if isinstance(pattern, bytes):
             return Finder(self).re_find_string(pattern)
+        return None
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.path
 
 
@@ -343,14 +354,14 @@ class SublimeText(File):
                 continue
             else:
                 return version.decode()
-        else:
-            raise ValueError(f"Could not find version string")
+        msg = "Could not find version string"
+        raise ValueError(msg)
 
 
 class Ref:
     ADDR_LEN = 4
 
-    def __init__(self, _type: str, total_size: int):
+    def __init__(self, _type: str, total_size: int) -> None:
         self.type = _type
         self.total_size = total_size
         self.op_size = self.total_size - self.ADDR_LEN
@@ -373,16 +384,18 @@ class Finder:
     STR_SAMPLE_LEN = 100
     NULL = b"\x00"
 
-    def __init__(self, file: File):
+    def __init__(self, file: "File") -> None:
         self.file = file
 
     def re_find(self, pattern: bytes):
         it = re.finditer(pattern, self.file.data, flags=re.DOTALL)
         match = next(it, None)
         if not match:
-            raise ValueError(f"Could not find pattern {pattern!r}")
+            msg = f"Could not find pattern {pattern!r}"
+            raise ValueError(msg)
         if next(it, None):
-            raise ValueError(f"Found multiple matches for pattern {pattern!r}")
+            msg = f"Found multiple matches for pattern {pattern!r}"
+            raise ValueError(msg)
         return match
 
     def re_find_string(self, pattern: bytes):
@@ -392,14 +405,16 @@ class Finder:
         try:
             match = self.re_find(sig.pattern)
         except ValueError as e:
-            raise ValueError(f"Could not find signature {sig}") from e
+            msg = f"Could not find signature {sig}"
+            raise ValueError(msg) from e
 
         offset = match.start() + sig.offset
 
         if sig.ref:
             ref = self.ref_types.get(sig.ref)
             if not ref:
-                raise ValueError(f"Unsupported reference type {sig.ref}")
+                msg = f"Unsupported reference type {sig.ref}"
+                raise ValueError(msg)
 
             matched_bytes = match.group(0)
             matched_bytes = matched_bytes[sig.offset : sig.offset + ref.total_size]
@@ -543,17 +558,18 @@ class PatchDB:
     OS = ("windows", "macos", "linux")
     ARCH = ("x64", "x86", "ARM64")
 
-    def __init__(self, os, arch, version):
+    def __init__(self, os, arch, version) -> None:
         try:
             self.channel = self.VERSIONS[version]
         except KeyError as e:
-            raise KeyError(
-                f"Version {version} does not exist in the patch database"
-            ) from e
+            msg = f"Version {version} does not exist in the patch database"
+            raise KeyError(msg) from e
         if os not in self.OS:
-            raise ValueError(f"Unsupported OS {os}")
+            msg = f"Unsupported OS {os}"
+            raise ValueError(msg)
         if arch not in self.ARCH:
-            raise ValueError(f"Unsupported architecture {arch}")
+            msg = f"Unsupported architecture {arch}"
+            raise ValueError(msg)
         self.os = os
         self.arch = arch
         self.version = version
@@ -572,7 +588,7 @@ class PatchDB:
             + self.DB[self.os][self.arch][self.channel]
         )
 
-    def load(self):
+    def load(self) -> None:
         if self.os == "windows":
             self.DB["windows"]["x64"]["base"] = (
                 Patch(
@@ -650,7 +666,7 @@ class Result(NamedTuple):
     success: bool = False
     info: str = ""
 
-    def __str__(self):
+    def __str__(self) -> str:
         status = "Success" if self.success else "Fail"
         return f"Version {self.version}: {status}: {self.info}"
 
@@ -666,21 +682,20 @@ def process_file(filepath, force_patch_channel=None):
     try:
         version = int(sublime.get_version())
     except ValueError as e:
-        logger.error(e)
+        logger.exception(e)
         if not force_patch_channel:
             return Result(info=e)
-        else:
-            version = None
+        version = None
     else:
         logger.info("Sublime Text version %d detected", version)
 
     try:
         patches = PatchDB("windows", "x64", version).get_patches()
     except ValueError as e:
-        logger.error(e)
+        logger.exception(e)
         return Result(info=e, version=version)
     except KeyError as e:
-        logger.error(e)
+        logger.exception(e)
         if force_patch_channel:
             # try the latest version from the specified channel
             forced_version = PatchDB.CHANNELS[force_patch_channel][-1]
@@ -701,7 +716,7 @@ def process_file(filepath, force_patch_channel=None):
     try:
         offsets = sublime.apply_all_patches()
     except ValueError as e:
-        logger.error(e)
+        logger.exception(e)
         return Result(info=e, version=version)
 
     try:
@@ -713,13 +728,11 @@ def process_file(filepath, force_patch_channel=None):
     return Result(success=True, info=[hex(o) for o in sorted(offsets)], version=version)
 
 
-def main():
+def main() -> int:
     BORDER_LEN = 64
 
     description = f"Sublime Text v{PatchDB.MIN_SUPPORTED}-{PatchDB.MAX_SUPPORTED} Windows x64 Patcher by rainbowpigeon"
-    epilog = (
-        "Report any issues at github.com/rainbowpigeon/sublime-text-4-patcher/issues!"
-    )
+    epilog = "Report any issues at github.com/rainbowpigeon/sublime-text-4-patcher/issues!"
 
     parser = argparse.ArgumentParser(
         prog=Path(__file__).name,
@@ -766,9 +779,9 @@ def main():
 
         for file in test_path.glob("./sublime_text_build_*_x64.zip"):
             subdir = file.stem
-            with ZipFile(file) as zip:
+            with ZipFile(file) as zf:
                 # overwrites without confirmation
-                zip.extract(TARGET_PROGRAM, test_path / subdir)
+                zf.extract(TARGET_PROGRAM, test_path / subdir)
 
         test_results = []
         for file in test_path.glob(f"./sublime_text_build_*_x64/{TARGET_PROGRAM}"):
@@ -779,7 +792,7 @@ def main():
         for result in test_results:
             logger.info(result)
 
-        return
+        return 0
 
     if not filepath:
         try:

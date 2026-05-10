@@ -24,6 +24,9 @@ ignore = [
     "D",        # pydocstyle
     "COM812",   # trailing comma (formatter conflict)
     "ISC001",   # string concat (formatter conflict)
+    "TD002",
+    "TD003",
+    "FIX002",
 ]
 
 [tool.ruff.format]

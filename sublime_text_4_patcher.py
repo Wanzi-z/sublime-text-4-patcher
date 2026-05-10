@@ -11,7 +11,7 @@ import re
 from collections.abc import Sequence
 from pathlib import Path
 from sys import exit
-from typing import List, NamedTuple, Optional, Union
+from typing import NamedTuple, Optional, Union
 from zipfile import ZipFile
 
 import pefile
@@ -54,7 +54,7 @@ class PrettyBytes:
     def __init__(self, _bytes: bytes) -> None:
         self.bytes = _bytes
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "".join("\\x{:02x}".format(b) for b in self.bytes)
 
     def __format__(self, format_spec) -> str:
@@ -130,7 +130,7 @@ class Patch:
         }.items()
     }
 
-    def __init__(self, patch_type: str, sigs: Union[Sig, Sigs]):
+    def __init__(self, patch_type: str, sigs: Union[Sig, Sigs]) -> None:
         # create Sigs for single Sig
         if isinstance(sigs, Sig):
             sigs = Sigs(sigs.name, sigs)
@@ -179,7 +179,7 @@ class Patch:
         return self.offset
 
     @staticmethod
-    def log_patch(offset, name, old_bytes, new_bytes):
+    def log_patch(offset, name, old_bytes, new_bytes) -> None:
         logger.debug(
             "Offset {:<8}: {}\n\t - {}\n\t + {}\n".format(
                 hex(offset),
@@ -200,7 +200,7 @@ class File:
 
     NULL = b"\x00"
 
-    def __init__(self, filepath: Union[str, Path]):
+    def __init__(self, filepath: Union[str, Path]) -> None:
         self.path = self.parse_path(filepath)
         self.pe = self.parse_pe()
         self.sections = {s.Name.strip(self.NULL).decode(): s for s in self.pe.sections}
@@ -208,16 +208,17 @@ class File:
 
         try:
             self.data = memoryview(bytearray(self.path.read_bytes()))
-        except IOError as e:
-            raise IOError(f"{self.path} is not a valid file") from e
+        except OSError as e:
+            msg = f"{self.path} is not a valid file"
+            raise OSError(msg) from e
         else:
-            self.patches: List[Patch] = []
-            self.patched_offsets: List[int] = []
+            self.patches: list[Patch] = []
+            self.patched_offsets: list[int] = []
 
     def add_patch(self, patch: Patch) -> None:
         self.patches.append(patch)
 
-    def add_patches(self, patches: List[Patch]):
+    def add_patches(self, patches: list[Patch]):
         logger.info("Adding patches...")
         if not patches:
             logger.warning("No patches to add")
@@ -231,20 +232,24 @@ class File:
         try:
             self.path.replace(backup_path)
         except PermissionError as e:
+            msg = f"Permission denied renaming file to {backup_path}. Try running as Administrator"
             raise PermissionError(
-                f"Permission denied renaming file to {backup_path}. Try running as Administrator"
+                msg
             ) from e
-        except IOError as e:
-            raise IOError(f"Error renaming file to {backup_path}") from e
+        except OSError as e:
+            msg = f"Error renaming file to {backup_path}"
+            raise OSError(msg) from e
 
         try:
             self.path.write_bytes(self.data)
         except PermissionError as e:
+            msg = f"Permission denied writing to new file {self.path}. Try running as Administrator."
             raise PermissionError(
-                f"Permission denied writing to new file {self.path}. Try running as Administrator."
+                msg
             ) from e
-        except IOError as e:
-            raise IOError(f"Error writing to new file {self.path}") from e
+        except OSError as e:
+            msg = f"Error writing to new file {self.path}"
+            raise OSError(msg) from e
         else:
             logger.info("Patched file written at %s", self.path)
 
@@ -342,7 +347,7 @@ class SublimeText(File):
         )
     )
 
-    def __init__(self, filepath: Union[str, Path]):
+    def __init__(self, filepath: Union[str, Path]) -> None:
         super().__init__(filepath)
 
     def get_version(self):
@@ -452,7 +457,7 @@ class Finder:
         )
 
     @staticmethod
-    def get_addr(ref: Ref, matched_bytes: bytes):
+    def get_addr(ref: Ref, matched_bytes: bytes) -> int:
         rel_addr = matched_bytes[ref.op_size : ref.total_size]
         return int.from_bytes(rel_addr, byteorder="little")
 
@@ -675,8 +680,8 @@ def process_file(filepath, force_patch_channel=None):
     sublime = None
     try:
         sublime = SublimeText(filepath)
-    except (FileNotFoundError, pefile.PEFormatError, IOError) as e:
-        logger.error(e)
+    except (OSError, FileNotFoundError, pefile.PEFormatError) as e:
+        logger.exception(e)
         return Result(info=e)
 
     try:
@@ -721,8 +726,8 @@ def process_file(filepath, force_patch_channel=None):
 
     try:
         sublime.save()
-    except (IOError, PermissionError) as e:
-        logger.error(e)
+    except (OSError, PermissionError) as e:
+        logger.exception(e)
         return Result(info=e, version=version)
 
     return Result(success=True, info=[hex(o) for o in sorted(offsets)], version=version)
